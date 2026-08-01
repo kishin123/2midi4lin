@@ -265,7 +265,7 @@ function openSharePage() {
   callApi('open_browser', 'https://2midi4lin.kesug.com/')
 }
 function openBili() {
-  callApi('open_browser', 'https://space.bilibili.com/3067649684')
+  callApi('open_browser', 'https://search.bilibili.com/all?keyword=' + encodeURIComponent('真夏的硬币'))
 }
 </script>
 
