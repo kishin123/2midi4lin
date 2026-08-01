@@ -73,7 +73,7 @@ async function trStart() {
     tr.polling = setInterval(async () => {
       const s = await callApi('get_status')
       tr.progress = s.progress
-      if (s.status === 'done') { tr.status = 'done'; tr.resultPath = s.result; clearInterval(tr.polling); promptShare() }
+      if (s.status === 'done') { tr.status = 'done'; tr.resultPath = s.result; saveLastResult(s.result); clearInterval(tr.polling); promptShare() }
       else if (s.status === 'error') { tr.status = 'error'; tr.errorMsg = s.error; clearInterval(tr.polling) }
     }, 500)
   } catch (e: any) { tr.status = 'error'; tr.errorMsg = String(e) }
@@ -164,7 +164,7 @@ async function vtmStart() {
       const s = await callApi('get_status')
       vtm.progress = s.progress
       if (s.stage) vtm.stage = s.stage
-      if (s.status === 'done') { vtm.status = 'done'; vtm.resultPath = s.result; clearInterval(vtm.polling); promptShare() }
+      if (s.status === 'done') { vtm.status = 'done'; vtm.resultPath = s.result; saveLastResult(s.result); clearInterval(vtm.polling); promptShare() }
       else if (s.status === 'error') { vtm.status = 'error'; vtm.errorMsg = s.error; clearInterval(vtm.polling) }
     }, 500)
   } catch (e: any) { vtm.status = 'error'; vtm.errorMsg = String(e) }
@@ -172,6 +172,12 @@ async function vtmStart() {
 function vtmOpenFolder() { if (vtm.resultPath) callApi('open_file', vtm.resultPath).catch(()=>{}) }
 
 // 完成时提示分享（延迟 1s，让用户先看到结果）
+// 记录最后生成的成品（路径+文件名），不受重置影响：右上角分享自动带文件名、弹窗可打开文件夹
+const lastResult = reactive({ path: '', name: '' })
+function saveLastResult(path: string) {
+  lastResult.path = path
+  lastResult.name = path.split(/[/\\]/).pop()?.replace(/\.\w+$/, '') || ''
+}
 function promptShare() {
   setTimeout(() => openShareDialog(undefined, false), 1000)
 }
@@ -253,7 +259,7 @@ async function doShare() {
   }
 }
 function openShareDialog(title?: string, editable = true) {
-  const src: string = title || tr.fileName || (vtm.resultPath ? vtm.resultPath.split(/[/\\]/).pop() as string : '')
+  const src: string = title || lastResult.name || tr.fileName || (vtm.resultPath ? vtm.resultPath.split(/[/\\]/).pop() as string : '')
   shareTitle.value = src.replace(/\.\w+$/, '')
   shareTitleEditable.value = editable
   shareCode.value = ''
@@ -263,6 +269,9 @@ function openShareDialog(title?: string, editable = true) {
 }
 function openSharePage() {
   callApi('open_browser', 'https://2midi4lin.kesug.com/')
+}
+function openLastResultFolder() {
+  if (lastResult.path) callApi('open_file', lastResult.path).catch(()=>{})
 }
 function openBili() {
   callApi('open_browser', 'https://space.bilibili.com/12077314')
@@ -451,6 +460,7 @@ function openBili() {
       <p class="hint" style="margin-bottom:4px">分享码请从 <b style="color:var(--text)">林离</b> 软件中获取（播放页面显示的分享码）</p>
       <p class="hint" style="margin-bottom:12px">填入后作品会展示在集合页上</p>
       <input v-model="shareCode" class="search-input" placeholder="从林离获取分享码（如 L35X0G）" style="margin-bottom:8px">
+      <button v-if="lastResult.path" class="btn-second" style="width:100%;margin-bottom:8px" @click="openLastResultFolder">📂 打开成品文件夹</button>
       <input v-if="shareTitleEditable" v-model="shareTitle" class="search-input" placeholder="填写曲名（默认取文件名）" style="margin-bottom:8px">
       <div v-else style="margin-bottom:8px; padding:10px 12px; background:#0d1b2e; border:1px solid #334; border-radius:6px; font-size:14px; color:var(--text)">
         {{ shareTitle || '（未选择文件）' }}
