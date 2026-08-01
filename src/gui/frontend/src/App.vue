@@ -264,6 +264,9 @@ function openShareDialog(title?: string, editable = true) {
 function openSharePage() {
   callApi('open_browser', 'https://2midi4lin.kesug.com/')
 }
+function openBili() {
+  callApi('open_browser', 'https://search.bilibili.com/all?keyword=' + encodeURIComponent('真夏的硬币'))
+}
 </script>
 
 <template>
@@ -430,6 +433,15 @@ function openSharePage() {
         </div>
       </section>
     </div>
+
+    <!-- 页脚：常驻入口 -->
+    <footer class="footer">
+      <span>🌐 作品集：</span>
+      <a href="#" @click.prevent="openSharePage">2midi4lin.kesug.com</a>
+      <span class="sep">·</span>
+      <span>B站：</span>
+      <a href="#" @click.prevent="openBili">真夏的硬币</a>
+    </footer>
   </div>
 
   <!-- ========== 分享弹窗 ========== -->
@@ -549,4 +561,10 @@ header h1 { font-size: 26px; }
 .modal h3 { margin-bottom: 4px; }
 .modal .search-input { width: 100%; background: #0d1b2e; border: 1px solid #334; border-radius: 6px; padding: 10px 12px; color: var(--text); font-size: 14px; }
 .modal .search-input::placeholder { color: #556; }
+
+/* 页脚 */
+.footer { text-align: center; padding: 12px; font-size: 12px; color: var(--muted); border-top: 1px solid #223; margin-top: 16px; }
+.footer a { color: #4FC3F7; text-decoration: none; }
+.footer a:hover { text-decoration: underline; }
+.footer .sep { margin: 0 6px; }
 </style>
