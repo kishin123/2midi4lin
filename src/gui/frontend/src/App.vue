@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 
 const tab = ref<'transcribe' | 'download'>('transcribe')
 
@@ -177,6 +177,19 @@ async function vtmStart() {
   } catch (e: any) { vtm.status = 'error'; vtm.errorMsg = String(e) }
 }
 function vtmOpenFolder() { if (vtm.resultPath) callApi('open_file', vtm.resultPath).catch(()=>{}) }
+
+// 视频链接平台提示：识别 B站/YouTube 显示对应指引
+const vtmUrlHint = computed(() => {
+  const u = vtm.url.trim().toLowerCase()
+  if (!u) return '粘贴视频链接后直接点下方「开始转录」即可（与本地文件二选一）'
+  if (u.includes('bilibili.com') || u.includes('b23.tv')) {
+    return '✅ B站链接，可直接转录；若提示需登录，请换公开视频或登录后重试'
+  }
+  if (u.includes('youtube.com') || u.includes('youtu.be')) {
+    return '⚠️ YouTube 若遇反爬验证，请在 ⚙️设置 → 🎫 YouTube 授权 导入 cookies.txt 后重试'
+  }
+  return '粘贴视频链接后直接点下方「开始转录」即可（与本地文件二选一）'
+})
 
 // 完成时提示分享（延迟 1s，让用户先看到结果）
 // 记录最后生成的成品（路径+文件名），不受重置影响：右上角分享自动带文件名、弹窗可打开文件夹
@@ -393,7 +406,7 @@ const showSettings = ref(false)
           <input v-model="vtm.url" class="search-input" placeholder="或粘贴钢琴演奏视频链接（B站/YouTube），直接转 MIDI"
                  @keyup.enter="trStart" @input="if (vtm.url.trim() && tr.filePath) { tr.filePath=''; tr.fileName=''; tr.analysis=null }" />
         </div>
-        <p class="hint" style="margin-top:6px">粘贴视频链接后直接点下方「开始转录」即可（与本地文件二选一）</p>
+        <p class="hint" style="margin-top:6px">{{ vtmUrlHint }}</p>
         <section v-if="vtm.status==='running'" class="card progress-row" style="margin-top:8px;padding:8px 4px">
           <div class="bar"><div class="fill" :style="{width:vtm.progress+'%'}"></div></div>
           <span class="pct">{{ vtm.progress }}%</span>
