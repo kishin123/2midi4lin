@@ -67,6 +67,8 @@ pyinstaller 2midi4lin.spec
 
 ## 文档
 
+- [USER_GUIDE.md](USER_GUIDE.md) — 面向用户的使用说明（转录/视频/下载/分享完整流程）
+- [FAQ.md](FAQ.md) — 常见问题排查（YouTube 反爬 / SDL3 弹窗 / 保存目录）
 - [MODEL_RESEARCH.md](MODEL_RESEARCH.md) — 模型选型记录（AMT-APC vs Etude/MuScriptor/Pop2Piano 完整对比）
 - [MIDI_SOURCES.md](MIDI_SOURCES.md) — 钢琴 MIDI 资源站汇总与下载源调度
 - [GPU_ACCELERATION.md](GPU_ACCELERATION.md) — 可选 GPU 加速（onnxruntime-directml）
