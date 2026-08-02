@@ -38,6 +38,9 @@ function mockCall(method: string, _args: any[]): Promise<any> {
     case 'choose_save_dir': return delay({ ok: true, msg: '已设置：C:/Users/demo/Music/我的作品' })
     case 'set_save_dir': return delay({ ok: true, msg: '已设置目录' })
     case 'reset_save_dir': return delay({ ok: true, msg: '已恢复默认' })
+    case 'get_cookie_status': return delay({ configured: false, path: '', save_dir: 'C:/Users/demo/2midi4lin' })
+    case 'choose_cookie_file': return delay({ ok: true, msg: '已启用 cookies：cookies.txt' })
+    case 'clear_cookie': return delay({ ok: true, msg: '已清除 cookies' })
     default: return delay(null)
   }
 }
@@ -312,6 +315,38 @@ async function resetSaveDir() {
 }
 
 loadSaveDir()
+
+// ======== YouTube cookies 授权 ========
+const cookie = reactive({
+  configured: false, path: '', msg: '', loading: false,
+})
+
+async function loadCookie() {
+  try {
+    const r = await callApi('get_cookie_status')
+    cookie.configured = r.configured; cookie.path = r.path
+  } catch (e: any) { cookie.msg = String(e) }
+}
+
+async function chooseCookie() {
+  cookie.loading = true; cookie.msg = ''
+  try {
+    const r = await callApi('choose_cookie_file')
+    cookie.msg = r.msg || ''
+    if (r.ok) await loadCookie()
+  } catch (e: any) { cookie.msg = String(e) } finally { cookie.loading = false }
+}
+
+async function clearCookie() {
+  cookie.loading = true; cookie.msg = ''
+  try {
+    const r = await callApi('clear_cookie')
+    cookie.msg = r.msg || ''
+    if (r.ok) await loadCookie()
+  } catch (e: any) { cookie.msg = String(e) } finally { cookie.loading = false }
+}
+
+loadCookie()
 </script>
 
 <template>
@@ -493,6 +528,22 @@ loadSaveDir()
       </div>
       <p v-if="saveDir.msg" class="path" style="margin-top:6px; color:#4FC3F7">{{ saveDir.msg }}</p>
       <p class="path" style="margin-top:6px; color:var(--muted)">转录/视频/下载的成品统一保存到该目录下，默认跟随 exe 所在位置</p>
+    </section>
+
+    <!-- YouTube cookies 授权 -->
+    <section class="card" style="margin-top:12px">
+      <h4>🎫 YouTube 授权</h4>
+      <p class="path" style="margin:4px 0 8px">
+        状态：
+        <span v-if="cookie.configured" style="color:#81C784">✅ 已启用</span>
+        <span v-else style="color:var(--muted)">未配置（下载 YouTube 可能触发反爬验证）</span>
+      </p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-primary btn-s" @click="chooseCookie" :disabled="cookie.loading">📄 导入 cookies 文件</button>
+        <button v-if="cookie.configured" class="btn-second btn-s" @click="clearCookie" :disabled="cookie.loading">🗑 清除</button>
+      </div>
+      <p v-if="cookie.msg" class="path" style="margin-top:6px; color:#4FC3F7">{{ cookie.msg }}</p>
+      <p class="path" style="margin-top:6px; color:var(--muted)">从浏览器导出 YouTube 的 cookies.txt（Chrome 装 Get cookies.txt LOCALLY 扩展），导入后下载 YouTube 不再触发验证</p>
     </section>
 
     <!-- 页脚：常驻入口 -->

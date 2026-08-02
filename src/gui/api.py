@@ -418,6 +418,69 @@ class Api:
         self._save_config(cfg)
         return {"ok": True, "msg": f"已恢复默认：{self._default_dir()}"}
 
+    # ---- YouTube cookies 管理 ----
+
+    def _cookie_config_path(self) -> str:
+        """配置目录下的 cookies.txt（与 config.json 同目录，独立于保存目录）。"""
+        return os.path.join(os.path.expanduser("~"), ".2midi4lin", "cookies.txt")
+
+    def _find_cookie(self) -> str:
+        """按优先级查找 cookies.txt：保存目录 → 配置目录 → exe 目录。"""
+        candidates = [
+            os.path.join(self._get_output_dir(), "cookies.txt"),
+            self._cookie_config_path(),
+        ]
+        if getattr(sys, "frozen", False):
+            candidates.append(
+                os.path.join(os.path.dirname(os.path.abspath(sys.executable)), "cookies.txt")
+            )
+        for p in candidates:
+            if os.path.isfile(p):
+                return p
+        return ""
+
+    def get_cookie_status(self) -> dict:
+        """返回当前 cookies 配置状态（前端设置页展示用）。"""
+        p = self._find_cookie()
+        return {
+            "configured": bool(p),
+            "path": p,
+            "save_dir": self._get_output_dir(),
+        }
+
+    def choose_cookie_file(self) -> dict:
+        """选择浏览器导出的 cookies.txt，复制到配置目录后自动启用。"""
+        if self._window is None:
+            return {"ok": False, "msg": "窗口未就绪"}
+        try:
+            import webview
+            result = self._window.create_file_dialog(
+                webview.OPEN_DIALOG, allow_multiple=False,
+                file_types=("cookies 文件 (*.txt)", "所有文件 (*.*)"),
+            )
+            if not result or not len(result):
+                return {"ok": False, "msg": "已取消选择"}
+            src = result[0]
+            if not os.path.isfile(src):
+                return {"ok": False, "msg": "文件不存在"}
+            import shutil
+            dst = self._cookie_config_path()
+            shutil.copyfile(src, dst)
+            return {"ok": True, "msg": f"已启用 cookies：{os.path.basename(src)}"}
+        except Exception as e:
+            return {"ok": False, "msg": f"导入失败: {e}"}
+
+    def clear_cookie(self) -> dict:
+        """清除配置目录下的 cookies.txt。"""
+        dst = self._cookie_config_path()
+        if os.path.isfile(dst):
+            try:
+                os.remove(dst)
+                return {"ok": True, "msg": "已清除 cookies"}
+            except Exception as e:
+                return {"ok": False, "msg": f"清除失败: {e}"}
+        return {"ok": True, "msg": "当前未配置 cookies"}
+
     def _run_video_to_midi(self, url: str, style: str, mode: str = "apc"):
         """后台线程：下载视频音频 → 转 wav → 转录（原生 MIDI 输出）。"""
         try:
@@ -445,9 +508,9 @@ class Api:
                 "no_warnings": True,
                 "progress_hooks": [progress_hook],
             }
-            # 解决 YouTube 反爬验证：用户把浏览器导出的 cookies.txt 放到输出目录即自动使用
-            cookie_file = os.path.join(self._get_output_dir(), "cookies.txt")
-            if os.path.isfile(cookie_file):
+            # 解决 YouTube 反爬验证：自动检测 cookies.txt（保存目录/配置目录/exe 目录）
+            cookie_file = self._find_cookie()
+            if cookie_file:
                 ydl_opts["cookiefile"] = cookie_file
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -506,8 +569,9 @@ class Api:
                 "YouTube 检测到未登录下载请求，要求验证身份（反机器人验证）。\n"
                 "解决办法（任选其一）：\n"
                 "1. 换用 B 站等其他平台的视频链接\n"
-                "2. 用浏览器导出 YouTube 的 cookies.txt，放到\n"
-                "   ~/Music/2midi4lin/cookies.txt 后重试\n"
+                "2. 在「📁 保存目录」下方「🎫 YouTube 授权」导入 cookies.txt，"
+                "或手动放到保存目录下重试：\n"
+                f"   {self._get_output_dir()}\n"
                 "   （Chrome 装 Get cookies.txt LOCALLY 扩展即可导出）"
             )
         if "Video unavailable" in msg:
