@@ -347,6 +347,9 @@ async function clearCookie() {
 }
 
 loadCookie()
+
+// ======== 设置折叠 ========
+const showSettings = ref(false)
 </script>
 
 <template>
@@ -514,36 +517,42 @@ loadCookie()
       </section>
     </div>
 
-    <!-- 保存目录设置 -->
-    <section class="card" style="margin-top:12px">
-      <h4>📁 保存目录</h4>
-      <p class="path" style="margin:4px 0 8px; word-break:break-all">
-        当前：{{ saveDir.dir || '加载中...' }}
-        <span v-if="saveDir.custom" style="color:#FFD54F">（自定义）</span>
-        <span v-else style="color:var(--muted)">（默认）</span>
-      </p>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn-primary btn-s" @click="chooseSaveDir" :disabled="saveDir.loading">📂 选择目录</button>
-        <button class="btn-second btn-s" @click="resetSaveDir" :disabled="saveDir.loading">↩ 恢复默认</button>
+    <!-- 设置（折叠） -->
+    <section class="card settings-card">
+      <div class="settings-toggle" @click="showSettings = !showSettings">
+        <span>⚙️ 设置</span>
+        <span class="chevron" :class="{open: showSettings}">▾</span>
       </div>
-      <p v-if="saveDir.msg" class="path" style="margin-top:6px; color:#4FC3F7">{{ saveDir.msg }}</p>
-      <p class="path" style="margin-top:6px; color:var(--muted)">转录/视频/下载的成品统一保存到该目录下，默认跟随 exe 所在位置</p>
-    </section>
-
-    <!-- YouTube cookies 授权 -->
-    <section class="card" style="margin-top:12px">
-      <h4>🎫 YouTube 授权</h4>
-      <p class="path" style="margin:4px 0 8px">
-        状态：
-        <span v-if="cookie.configured" style="color:#81C784">✅ 已启用</span>
-        <span v-else style="color:var(--muted)">未配置（下载 YouTube 可能触发反爬验证）</span>
-      </p>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn-primary btn-s" @click="chooseCookie" :disabled="cookie.loading">📄 导入 cookies 文件</button>
-        <button v-if="cookie.configured" class="btn-second btn-s" @click="clearCookie" :disabled="cookie.loading">🗑 清除</button>
+      <div v-show="showSettings" class="settings-body">
+        <div class="settings-group">
+          <h4>📁 保存目录</h4>
+          <p class="path" style="margin:4px 0 8px; word-break:break-all">
+            当前：{{ saveDir.dir || '加载中...' }}
+            <span v-if="saveDir.custom" style="color:#FFD54F">（自定义）</span>
+            <span v-else style="color:var(--muted)">（默认）</span>
+          </p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn-primary btn-s" @click="chooseSaveDir" :disabled="saveDir.loading">📂 选择目录</button>
+            <button class="btn-second btn-s" @click="resetSaveDir" :disabled="saveDir.loading">↩ 恢复默认</button>
+          </div>
+          <p v-if="saveDir.msg" class="path" style="margin-top:6px; color:#4FC3F7">{{ saveDir.msg }}</p>
+          <p class="path" style="margin-top:6px; color:var(--muted)">转录/视频/下载的成品统一保存到该目录下，默认跟随 exe 所在位置</p>
+        </div>
+        <div class="settings-group">
+          <h4>🎫 YouTube 授权</h4>
+          <p class="path" style="margin:4px 0 8px">
+            状态：
+            <span v-if="cookie.configured" style="color:#81C784">✅ 已启用</span>
+            <span v-else style="color:var(--muted)">未配置（下载 YouTube 可能触发反爬验证）</span>
+          </p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn-primary btn-s" @click="chooseCookie" :disabled="cookie.loading">📄 导入 cookies 文件</button>
+            <button v-if="cookie.configured" class="btn-second btn-s" @click="clearCookie" :disabled="cookie.loading">🗑 清除</button>
+          </div>
+          <p v-if="cookie.msg" class="path" style="margin-top:6px; color:#4FC3F7">{{ cookie.msg }}</p>
+          <p class="path" style="margin-top:6px; color:var(--muted)">从浏览器导出 YouTube 的 cookies.txt（Chrome 装 Get cookies.txt LOCALLY 扩展），导入后下载 YouTube 不再触发验证</p>
+        </div>
       </div>
-      <p v-if="cookie.msg" class="path" style="margin-top:6px; color:#4FC3F7">{{ cookie.msg }}</p>
-      <p class="path" style="margin-top:6px; color:var(--muted)">从浏览器导出 YouTube 的 cookies.txt（Chrome 装 Get cookies.txt LOCALLY 扩展），导入后下载 YouTube 不再触发验证</p>
     </section>
 
     <!-- 页脚：常驻入口 -->
@@ -718,4 +727,15 @@ header h1 {
 .footer a { color: #7cc7ff; text-decoration: none; transition: color .2s; }
 .footer a:hover { color: #aadcff; text-decoration: underline; }
 .footer .sep { margin: 0 6px; color: #3a4a6b; }
+
+/* 设置折叠 */
+.settings-card { padding: 0; overflow: hidden; }
+.settings-toggle { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; cursor: pointer; font-size: 14px; font-weight: 600; user-select: none; transition: color .2s; }
+.settings-toggle:hover { color: var(--gold); }
+.chevron { transition: transform .25s; color: var(--muted); font-size: 12px; }
+.chevron.open { transform: rotate(180deg); }
+.settings-body { padding: 0 18px 16px; display: flex; flex-direction: column; gap: 14px; }
+.settings-group { border-top: 1px solid var(--card-border); padding-top: 14px; }
+.settings-group:first-child { border-top: none; padding-top: 0; }
+.settings-group h4 { font-size: 13px; margin-bottom: 6px; }
 </style>
