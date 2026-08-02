@@ -17,7 +17,7 @@
 | 📤 **分享** | 转录/视频完成后自动弹窗，填入**林离分享码**（播放页面显示，如 L35X0G）即可发布，作品展示在 [2midi4lin.kesug.com](https://2midi4lin.kesug.com) 集合页 |
 | 📥 **下载** | 智能搜索栏：歌名多源流式搜索，或粘贴 MuseScore 乐谱链接直接下载 |
 
-所有产物统一保存在 `~/Music/2midi4lin/`（`transcribe` / `videos` / `downloads` 子目录）。
+产物默认保存在 **exe 所在目录**（`transcribe` / `videos` / `downloads` 子目录），界面「📁 保存目录」可自定义；exe 目录不可写时自动回退到 `~/Music/2midi4lin/`。
 
 ## 关于林离
 
@@ -55,7 +55,15 @@ python -m src.cli download "歌名"              # 多源搜索下载
 pyinstaller 2midi4lin.spec
 ```
 
-产物在 `dist/`。当前体积约 125MB（含 yt-dlp 全量 extractors + 内置精简 ffmpeg 21MB），目标控制在 100MB 内。
+产物在 `dist/`。当前体积约 151MB（含 yt-dlp 全量 extractors + 内置精简 ffmpeg + ONNX 模型）。
+
+## 常见问题（FAQ）
+
+- **YouTube 报错 `Sign in to confirm you're not a bot`** → YouTube 反爬验证，见 [FAQ.md](FAQ.md) 第 1 条
+- **弹窗 `Failed loading SDL3 library`** → 旧版本问题（v0.2.0 已修复），更新到最新版即可
+- **产物保存到哪 / 怎么改目录** → 默认 exe 所在目录，界面「📁 保存目录」可自定义，见 [FAQ.md](FAQ.md) 第 3 条
+
+完整排查指南见 [FAQ.md](FAQ.md)。
 
 ## 文档
 
