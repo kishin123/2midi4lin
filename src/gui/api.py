@@ -4,6 +4,8 @@
 所有重量级导入延迟到实际调用时进行，避免阻塞 GUI 启动。
 """
 import os
+import sys
+import json
 import threading
 
 
@@ -17,6 +19,11 @@ class Api:
         self._error_msg = None
         self._dropped_file = None
         self._stage = ""  # 阶段提示：下载中/转换中/转录中
+        self._window = None  # pywebview 窗口引用，选目录对话框用
+
+    def set_window(self, window):
+        """由启动入口注入 pywebview 窗口对象（create_window 之后）。"""
+        self._window = window
 
     def set_dropped_file(self, path: str):
         print(f"[drop] on_drop 收到: {path!r}", flush=True)
@@ -305,17 +312,111 @@ class Api:
         import shutil
         return shutil.which("ffmpeg") or ""
 
-    def _get_output_dir(self) -> str:
-        """统一输出目录：用户 Music/2midi4lin（打包后不依赖临时目录）。"""
-        home = os.path.expanduser("~")
-        music = os.path.join(home, "Music", "2midi4lin")
+    # ---- 保存目录管理 ----
+
+    def _config_path(self) -> str:
+        """配置文件位置：用户主目录下 .2midi4lin/config.json。"""
+        cfg_dir = os.path.join(os.path.expanduser("~"), ".2midi4lin")
         try:
-            os.makedirs(music, exist_ok=True)
-            return music
+            os.makedirs(cfg_dir, exist_ok=True)
         except Exception:
-            fallback = os.path.join(home, "2midi4lin")
-            os.makedirs(fallback, exist_ok=True)
-            return fallback
+            pass
+        return os.path.join(cfg_dir, "config.json")
+
+    def _load_config(self) -> dict:
+        try:
+            with open(self._config_path(), "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+
+    def _save_config(self, cfg: dict):
+        try:
+            with open(self._config_path(), "w", encoding="utf-8") as f:
+                json.dump(cfg, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"[config] 保存失败: {e}", flush=True)
+
+    @staticmethod
+    def _writable_dir(d: str) -> bool:
+        """目录是否存在且可写（写入探针文件验证）。"""
+        try:
+            os.makedirs(d, exist_ok=True)
+            probe = os.path.join(d, ".2midi4lin_write_test")
+            with open(probe, "w") as f:
+                f.write("")
+            os.remove(probe)
+            return True
+        except Exception:
+            return False
+
+    def _default_dir(self) -> str:
+        """默认保存目录：exe 所在目录（打包后）/ 项目根目录（源码）；不可写则回退用户目录。"""
+        if getattr(sys, "frozen", False):
+            base = os.path.dirname(os.path.abspath(sys.executable))
+        else:
+            base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        if self._writable_dir(base):
+            return base
+        # 兜底：用户目录（每台电脑自动适应当前用户，始终可写）
+        home = os.path.expanduser("~")
+        for candidate in (os.path.join(home, "Music", "2midi4lin"), os.path.join(home, "2midi4lin")):
+            if self._writable_dir(candidate):
+                return candidate
+        return os.path.expanduser("~")
+
+    def _get_output_dir(self) -> str:
+        """统一输出目录（优先级）：用户自定义 > exe 目录 > 用户目录兜底。"""
+        cfg = self._load_config()
+        custom = cfg.get("save_dir", "")
+        if custom and self._writable_dir(custom):
+            return custom
+        return self._default_dir()
+
+    def get_save_dir(self) -> dict:
+        """返回当前保存目录（前端设置页展示用）。"""
+        d = self._get_output_dir()
+        cfg = self._load_config()
+        return {
+            "dir": d,
+            "custom": bool(cfg.get("save_dir")),
+            "custom_dir": cfg.get("save_dir", ""),
+            "default_dir": self._default_dir(),
+        }
+
+    def choose_save_dir(self) -> dict:
+        """弹出系统目录选择框，选择后设为自定义保存目录。"""
+        if self._window is None:
+            return {"ok": False, "msg": "窗口未就绪"}
+        try:
+            import webview
+            result = self._window.create_file_dialog(webview.FOLDER_DIALOG)
+            if not result or not len(result):
+                return {"ok": False, "msg": "已取消选择"}
+            return self.set_save_dir(result[0])
+        except Exception as e:
+            return {"ok": False, "msg": f"选择目录失败: {e}"}
+
+    def set_save_dir(self, path: str) -> dict:
+        """设置自定义保存目录（校验存在且可写）。"""
+        path = (path or "").strip()
+        if not path:
+            return {"ok": False, "msg": "目录不能为空"}
+        if not os.path.isdir(path):
+            return {"ok": False, "msg": "目录不存在，请重新选择"}
+        if not self._writable_dir(path):
+            return {"ok": False, "msg": "目录不可写，请换一个有权限的目录"}
+        cfg = self._load_config()
+        cfg["save_dir"] = os.path.abspath(path)
+        self._save_config(cfg)
+        return {"ok": True, "msg": f"已设置：{path}"}
+
+    def reset_save_dir(self) -> dict:
+        """恢复默认保存目录（exe 所在目录）。"""
+        cfg = self._load_config()
+        cfg.pop("save_dir", None)
+        self._save_config(cfg)
+        return {"ok": True, "msg": f"已恢复默认：{self._default_dir()}"}
 
     def _run_video_to_midi(self, url: str, style: str, mode: str = "apc"):
         """后台线程：下载视频音频 → 转 wav → 转录（原生 MIDI 输出）。"""

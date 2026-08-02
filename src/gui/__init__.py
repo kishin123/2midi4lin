@@ -73,6 +73,7 @@ def run_gui():
         resizable=True,
         js_api=api,
     )
+    api.set_window(window)  # 供选目录对话框使用
 
     # 原生拖拽支持：用 webview.dom 注册 document drop 事件
     # （PyWebView 会把完整文件路径注入到事件对象 pywebviewFullPath 字段）
