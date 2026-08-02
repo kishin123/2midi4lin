@@ -34,6 +34,10 @@ function mockCall(method: string, _args: any[]): Promise<any> {
     case 'download_musescore_url': return delay('C:/Users/demo/Downloads/示例_musescore.mid')
     case 'open_file': return delay(null)
     case 'open_browser': return delay(null)
+    case 'get_save_dir': return delay({ dir: 'C:/Users/demo/Music/2midi4lin', custom: false, custom_dir: '', default_dir: 'C:/Users/demo/2midi4lin' })
+    case 'choose_save_dir': return delay({ ok: true, msg: '已设置：C:/Users/demo/Music/我的作品' })
+    case 'set_save_dir': return delay({ ok: true, msg: '已设置目录' })
+    case 'reset_save_dir': return delay({ ok: true, msg: '已恢复默认' })
     default: return delay(null)
   }
 }
@@ -276,6 +280,38 @@ function openLastResultFolder() {
 function openBili() {
   callApi('open_browser', 'https://space.bilibili.com/12077314')
 }
+
+// ======== 保存目录设置 ========
+const saveDir = reactive({
+  dir: '', custom: false, customDir: '', msg: '', loading: false,
+})
+
+async function loadSaveDir() {
+  try {
+    const r = await callApi('get_save_dir')
+    saveDir.dir = r.dir; saveDir.custom = r.custom; saveDir.customDir = r.custom_dir
+  } catch (e: any) { saveDir.msg = String(e) }
+}
+
+async function chooseSaveDir() {
+  saveDir.loading = true; saveDir.msg = ''
+  try {
+    const r = await callApi('choose_save_dir')
+    saveDir.msg = r.msg || ''
+    if (r.ok) await loadSaveDir()
+  } catch (e: any) { saveDir.msg = String(e) } finally { saveDir.loading = false }
+}
+
+async function resetSaveDir() {
+  saveDir.loading = true; saveDir.msg = ''
+  try {
+    const r = await callApi('reset_save_dir')
+    saveDir.msg = r.msg || ''
+    if (r.ok) await loadSaveDir()
+  } catch (e: any) { saveDir.msg = String(e) } finally { saveDir.loading = false }
+}
+
+loadSaveDir()
 </script>
 
 <template>
@@ -442,6 +478,22 @@ function openBili() {
         </div>
       </section>
     </div>
+
+    <!-- 保存目录设置 -->
+    <section class="card" style="margin-top:12px">
+      <h4>📁 保存目录</h4>
+      <p class="path" style="margin:4px 0 8px; word-break:break-all">
+        当前：{{ saveDir.dir || '加载中...' }}
+        <span v-if="saveDir.custom" style="color:#FFD54F">（自定义）</span>
+        <span v-else style="color:var(--muted)">（默认）</span>
+      </p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-primary btn-s" @click="chooseSaveDir" :disabled="saveDir.loading">📂 选择目录</button>
+        <button class="btn-second btn-s" @click="resetSaveDir" :disabled="saveDir.loading">↩ 恢复默认</button>
+      </div>
+      <p v-if="saveDir.msg" class="path" style="margin-top:6px; color:#4FC3F7">{{ saveDir.msg }}</p>
+      <p class="path" style="margin-top:6px; color:var(--muted)">转录/视频/下载的成品统一保存到该目录下，默认跟随 exe 所在位置</p>
+    </section>
 
     <!-- 页脚：常驻入口 -->
     <footer class="footer">
