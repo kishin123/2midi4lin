@@ -344,6 +344,10 @@ class Api:
                 "no_warnings": True,
                 "progress_hooks": [progress_hook],
             }
+            # 解决 YouTube 反爬验证：用户把浏览器导出的 cookies.txt 放到输出目录即自动使用
+            cookie_file = os.path.join(self._get_output_dir(), "cookies.txt")
+            if os.path.isfile(cookie_file):
+                ydl_opts["cookiefile"] = cookie_file
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
@@ -391,8 +395,27 @@ class Api:
             self._result_path = midi_path
         except Exception as e:
             self._status = "error"
-            self._error_msg = str(e)
+            self._error_msg = self._friendly_video_error(e)
 
+    def _friendly_video_error(self, e: Exception) -> str:
+        """把 yt-dlp/下载的原始报错转成用户能看懂的中文提示。"""
+        msg = str(e)
+        if "Sign in to confirm you're not a bot" in msg or "not a bot" in msg:
+            return (
+                "YouTube 检测到未登录下载请求，要求验证身份（反机器人验证）。\n"
+                "解决办法（任选其一）：\n"
+                "1. 换用 B 站等其他平台的视频链接\n"
+                "2. 用浏览器导出 YouTube 的 cookies.txt，放到\n"
+                "   ~/Music/2midi4lin/cookies.txt 后重试\n"
+                "   （Chrome 装 Get cookies.txt LOCALLY 扩展即可导出）"
+            )
+        if "Video unavailable" in msg:
+            return "视频不可用：可能已被删除、设为私密或受地区限制。"
+        if "Unsupported URL" in msg or "is not a valid URL" in msg:
+            return f"无法识别的链接，请粘贴视频页面地址。\n原始错误：{msg[:150]}"
+        if "ffmpeg" in msg.lower() and "not found" in msg.lower():
+            return "未找到 ffmpeg 组件，请重新安装软件或检查文件完整性。"
+        return msg
 
     # ---- 音频适配度检测 ----
 
