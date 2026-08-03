@@ -5,6 +5,7 @@
 """
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -303,10 +304,14 @@ class ONNXTranscriber(TranscribeBase):
 
     @staticmethod
     def detect_device() -> dict:
-        """探测实际可用的推理设备（不依赖模型文件，可提前调用）。
+        """探测实际可用的推理设备（提前调用）。
 
         返回 {"provider": "DmlExecutionProvider"|"CUDAExecutionProvider"|"CPUExecutionProvider",
               "gpu": bool, "label": "DirectML"|"CUDA"|"CPU"}
+
+        两层验证，避免 get_available_providers() 误报：
+        ① 硬件 GPU 存在（排除 Microsoft 基本显示适配器/远程/虚拟显卡）
+        ② 用真实模型实测 provider（创建 session + 最小推理跑通）
         """
         try:
             available = ort.get_available_providers()
@@ -325,9 +330,60 @@ class ONNXTranscriber(TranscribeBase):
             return {"provider": "CPUExecutionProvider", "gpu": False, "label": "CPU"}
         for prov, label in (("DmlExecutionProvider", "DirectML"),
                             ("CUDAExecutionProvider", "CUDA")):
-            if prov in available:
+            if prov not in available:
+                continue
+            if prov == "DmlExecutionProvider" and not ONNXTranscriber._has_hardware_gpu():
+                continue
+            if ONNXTranscriber._probe_provider(prov):
                 return {"provider": prov, "gpu": True, "label": label}
         return {"provider": "CPUExecutionProvider", "gpu": False, "label": "CPU"}
+
+    @staticmethod
+    def _has_hardware_gpu() -> bool:
+        """检测系统是否存在硬件 GPU（排除 Microsoft 基本显示适配器/远程/虚拟显卡）。
+
+        DirectML 需要真实 DX12 硬件；无 GPU 的机器（虚拟机/远程会话）只有
+        Microsoft Basic/Remote Display Adapter，DirectML 会退回 WARP 软件渲染，
+        不算真正的 GPU 加速。
+        """
+        try:
+            out = subprocess.run(
+                ["powershell", "-NoProfile", "-Command",
+                 "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name"],
+                capture_output=True, text=True, timeout=10,
+            )
+            for line in out.stdout.splitlines():
+                name = line.strip()
+                if not name:
+                    continue
+                low = name.lower()
+                if ("microsoft" in low or "basic" in low or "remote" in low
+                        or "virtual" in low or "display adapter" in low):
+                    continue
+                return True
+            return False
+        except Exception:
+            return True  # 查询失败保守返回 True，不误伤正常机器
+
+    @staticmethod
+    def _probe_provider(provider: str) -> bool:
+        """用真实模型创建 session 并跑一次最小推理，验证 provider 真正可用。"""
+        try:
+            onnx_path = str(_MODELS_DIR / "amt.onnx")
+            if not os.path.isfile(onnx_path):
+                return False
+            opts = ort.SessionOptions()
+            opts.intra_op_num_threads = 2
+            opts.inter_op_num_threads = 1
+            sess = ort.InferenceSession(onnx_path, opts, providers=[provider, "CPUExecutionProvider"])
+            active = sess.get_providers()
+            if not active or active[0] != provider:
+                return False
+            dummy = np.zeros((1, N_BINS, MARGIN_B + NUM_FRAME + MARGIN_F), dtype=np.float32)
+            sess.run(None, {"mel_spec": dummy})
+            return True
+        except Exception:
+            return False
 
     def _get_session(self):
         if self._ort_session is None:

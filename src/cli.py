@@ -9,6 +9,13 @@ import argparse
 import sys
 import os
 
+# PyInstaller windowed 模式（无控制台）下 stdout/stderr 为 None，
+# print 会 AttributeError，重定向到 devnull 防止崩溃
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, 'w')
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, 'w')
+
 
 def cmd_transcribe(args):
     """audio -> MIDI transcription."""
@@ -140,7 +147,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="2midi4lin - Piano MIDI toolset", prog="2midi4lin",
     )
-    parser.add_argument("--version", action="version", version="2midi4lin 0.1.0")
+    parser.add_argument("--version", action="version", version="2midi4lin 0.2.1")
 
     sub = parser.add_subparsers(dest="cmd", help="subcommand")
 
