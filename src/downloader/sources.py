@@ -278,7 +278,7 @@ class MidisssSource(BaseSource):
         req = urllib.request.Request(url, headers={"User-Agent": self._UA})
         try:
             with urllib.request.urlopen(req, timeout=10) as resp:
-                items = json.loads(resp.read().decode())
+                items = json.loads(resp.read().decode("utf-8", errors="replace"))
         except Exception:
             return []
         results = []

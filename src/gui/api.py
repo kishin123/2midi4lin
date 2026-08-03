@@ -759,9 +759,9 @@ class Api:
             req = urllib.request.Request(url, data=data, headers=headers)
             try:
                 resp = urllib.request.urlopen(req, timeout=15)
-                body = resp.read().decode()
+                body = resp.read().decode("utf-8", errors="replace")
             except urllib.error.HTTPError as e:
-                body = e.read().decode()
+                body = e.read().decode("utf-8", errors="replace")
 
             if "slowAES" not in body:
                 return body
@@ -791,7 +791,7 @@ class Api:
             result = json.loads(body)
             return result if isinstance(result, dict) else {"error": str(result)}
         except urllib.error.HTTPError as e:
-            body = e.read().decode()
+            body = e.read().decode("utf-8", errors="replace")
             try:
                 return json.loads(body)
             except Exception:

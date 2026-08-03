@@ -446,24 +446,7 @@ const showSettings = ref(false)
           <input v-model="vtm.url" class="search-input" placeholder="B站 / YouTube 视频链接"
                  @keyup.enter="trStart" @input="if (vtm.url.trim() && tr.filePath) { tr.filePath=''; tr.fileName=''; tr.analysis=null }" />
           <p class="hint" style="margin-top:6px">{{ vtmUrlHint }}</p>
-        </div>        <section v-if="vtm.status==='running'" class="card progress-row" style="margin-top:8px;padding:8px 4px">
-          <div class="bar"><div class="fill" :style="{width:vtm.progress+'%'}"></div></div>
-          <span class="pct">{{ vtm.progress }}%</span>
-        </section>
-        <section v-if="vtm.status==='running'" class="card" style="margin-top:4px;padding:6px 4px">
-          <p class="hint" style="text-align:center">⏳ {{ vtm.stage }}</p>
-        </section>
-        <section v-if="vtm.status==='done'" class="card result success" style="margin-top:8px;padding:8px 4px">
-          <span>✅</span>
-          <div class="ri">
-            <p>MIDI 已生成</p>
-            <p class="path">{{ vtm.resultPath }}</p>
-          </div>
-          <button class="btn-primary btn-s" @click="vtmOpenFolder">📂 打开文件夹</button>
-        </section>
-        <section v-if="vtm.status==='error'" class="card result error" style="margin-top:8px;padding:8px 4px">
-          <span>❌</span><div class="ri"><p>{{ vtm.errorMsg }}</p></div>
-        </section>
+        </div>
       </section>
 
       <!-- 转录模式 + 演奏风格 + 开始（合并一张卡） -->
@@ -501,6 +484,27 @@ const showSettings = ref(false)
           </button>
           <button v-if="tr.status!=='idle'||vtm.status!=='idle'" class="btn-second" @click="trReset">重置</button>
         </div>
+      </section>
+      <section v-if="vtm.status==='running'" class="card progress-row">
+        <div class="bar"><div class="fill" :style="{width:vtm.progress+'%'}"></div></div>
+        <span class="pct">{{ vtm.progress }}%</span>
+      </section>
+      <section v-if="vtm.status==='running'" class="card stage-hint">
+        <p class="hint" style="text-align:center">⏳ {{ vtm.stage }}</p>
+      </section>
+      <section v-if="vtm.status==='done'" class="card result success">
+        <span>✅</span>
+        <div class="ri">
+          <p>MIDI 已生成</p>
+          <p class="path">{{ vtm.resultPath }}</p>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button class="btn-primary btn-s" @click="vtmOpenFolder">📂 打开文件夹</button>
+          <button class="btn-second btn-s" @click="openShareDialog()">📤 分享</button>
+        </div>
+      </section>
+      <section v-if="vtm.status==='error'" class="card result error">
+        <span>❌</span><div class="ri"><p>处理失败</p><p class="path">{{ vtm.errorMsg }}</p></div>
       </section>
       <section v-if="tr.status==='running'" class="card progress-row">
         <div class="bar"><div class="fill" :style="{width:tr.progress+'%'}"></div></div>
@@ -754,6 +758,7 @@ header h1 {
 .dev-gpu { font-size: 12px; color: #81C784; background: rgba(129,199,132,.08); border: 1px solid rgba(129,199,132,.25); border-radius: 6px; padding: 4px 10px; display: inline-block; }
 .dev-cpu { font-size: 12px; color: #9a9ab0; background: rgba(154,154,176,.08); border: 1px solid rgba(154,154,176,.2); border-radius: 6px; padding: 4px 10px; display: inline-block; }
 .progress-row { display: flex; align-items: center; gap: 10px; }
+.stage-hint { padding: 8px 4px; }
 .bar { flex: 1; height: 6px; border-radius: 3px; background: #3a3a4a; overflow: hidden; }
 .fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .3s; }
 .pct { font-size: 13px; min-width: 38px; color: var(--muted); font-weight: 500; }
