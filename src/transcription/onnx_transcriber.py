@@ -37,8 +37,14 @@ THRESHOLD_OFFSET = 1.0
 THRESHOLD_FRAME = 0.5
 MIN_DURATION = 0.08
 
-# 预存 mel 滤波器矩阵
-_FB = np.load(str(_MODELS_DIR / "mel_fb.npy")).astype(np.float32)
+# 预存 mel 滤波器矩阵（懒加载：避免 import 时依赖模型文件，GPU 探测不受影响）
+_FB = None
+
+def _get_fb():
+    global _FB
+    if _FB is None:
+        _FB = np.load(str(_MODELS_DIR / "mel_fb.npy")).astype(np.float32)
+    return _FB
 
 # Hann 窗
 _WINDOW = (0.5 - 0.5 * np.cos(2 * np.pi * np.arange(2048) / 2048)).astype(np.float32)
@@ -132,7 +138,7 @@ def _melspectrogram(y):
         start = i * HOP_LENGTH
         stft[:, i] = np.fft.rfft(y[start:start + N_FFT] * _WINDOW)
     power = np.abs(stft) ** 2
-    mel = _FB.T @ power
+    mel = _get_fb().T @ power
     return np.log(mel.T + LOG_OFFSET)
 
 
@@ -304,7 +310,18 @@ class ONNXTranscriber(TranscribeBase):
         """
         try:
             available = ort.get_available_providers()
-        except Exception:
+            # 临时诊断日志：exe 运行时实际 providers
+            try:
+                with open(os.path.join(os.path.expanduser("~"), "2midi4lin_device.log"), "a", encoding="utf-8") as _f:
+                    _f.write(f"providers={available}\n")
+            except Exception:
+                pass
+        except Exception as e:
+            try:
+                with open(os.path.join(os.path.expanduser("~"), "2midi4lin_device.log"), "a", encoding="utf-8") as _f:
+                    _f.write(f"EXC {e!r}\n")
+            except Exception:
+                pass
             return {"provider": "CPUExecutionProvider", "gpu": False, "label": "CPU"}
         for prov, label in (("DmlExecutionProvider", "DirectML"),
                             ("CUDAExecutionProvider", "CUDA")):
