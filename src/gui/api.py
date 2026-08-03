@@ -78,8 +78,8 @@ class Api:
     def get_device_status(self) -> dict:
         """探测当前可用的推理设备（GPU 加速状态），供前端提前展示。"""
         try:
-            from src.transcription.onnx_transcriber import OnnxTranscriber
-            return OnnxTranscriber.detect_device()
+            from src.transcription.onnx_transcriber import ONNXTranscriber
+            return ONNXTranscriber.detect_device()
         except Exception:
             return {"provider": "CPUExecutionProvider", "gpu": False, "label": "CPU"}
 
