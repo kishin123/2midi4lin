@@ -69,7 +69,7 @@ def run_gui():
         title="2midi4lin - 钢琴 MIDI 转录",
         url=url,
         width=900,
-        height=820,
+        height=720,
         resizable=True,
         js_api=api,
     )
