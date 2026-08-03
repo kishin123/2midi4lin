@@ -70,3 +70,16 @@ pyinstaller 2midi4lin.spec
 - 后端：Python 3.10+ / onnxruntime / PyWebView / yt-dlp / pretty_midi
 - 前端：Vue 3 + Vite（开发热更新，生产构建后由 PyWebView 加载）
 - 转录模型：AMT-APC ONNX（`src/transcription/models/apc.onnx`，22MB FP32，纯 numpy mel 谱无 torch 依赖）
+
+## 开源许可与致谢
+
+2midi4lin 采用 **MIT License**（见 [LICENSE](LICENSE)）。
+
+本项目基于以下开源工作构建，特此致谢：
+
+- **AMT-APC**（Komiya, 2024, MIT）— 翻奏改编模型权重来源
+- **hFT-Transformer**（Sony, ISMIR 2023, MIT）— 忠实转录模型架构与预训练权重
+- **FFmpeg**（GPL-2.0+，gyan.dev 静态构建，以独立进程方式调用）
+- 其余依赖（onnxruntime / yt-dlp / PyWebView / Vue 等）见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+
+> 完整第三方许可声明：**[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)**
