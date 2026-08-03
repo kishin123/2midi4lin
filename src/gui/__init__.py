@@ -78,8 +78,8 @@ def run_gui():
     # 原生拖拽支持：用 webview.dom 注册 document drop 事件
     # （PyWebView 会把完整文件路径注入到事件对象 pywebviewFullPath 字段）
     def _on_drop(event):
-        # 注意：windowed exe（无控制台）下 print 会抛异常（sys.stdout=None），
-        # 这里禁止任何 print/stdout 输出，路径写入必须无条件执行
+        # 路径写入前置：不依赖任何 print/日志行为——windowed exe 无控制台时，
+        # 部分机器 sys.stdout 是坏句柄（非 None），print 会抛异常中断；先写路径则永远安全
         files = event.get("dataTransfer", {}).get("files", [])
         if files:
             api.set_dropped_file(files[0].get("pywebviewFullPath", ""))

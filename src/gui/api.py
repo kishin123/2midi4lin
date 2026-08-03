@@ -27,7 +27,7 @@ class Api:
         self._window = window
 
     def set_dropped_file(self, path: str):
-        # 注意：windowed exe（无控制台）下 print 抛异常，这里不能有任何 print
+        # 拖拽链路保持纯净：无任何 stdout 输出（部分机器 windowed 下 stdout 是坏句柄，print 可能抛异常）
         self._dropped_file = path
 
     def get_dropped_file(self) -> str:
