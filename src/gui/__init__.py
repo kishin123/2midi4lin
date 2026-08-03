@@ -78,23 +78,22 @@ def run_gui():
     # 原生拖拽支持：用 webview.dom 注册 document drop 事件
     # （PyWebView 会把完整文件路径注入到事件对象 pywebviewFullPath 字段）
     def _on_drop(event):
+        # 注意：windowed exe（无控制台）下 print 会抛异常（sys.stdout=None），
+        # 这里禁止任何 print/stdout 输出，路径写入必须无条件执行
         files = event.get("dataTransfer", {}).get("files", [])
         if files:
-            full = files[0].get("pywebviewFullPath", "")
-            print(f"[drop] 收到完整路径: {full!r}", flush=True)
-            api.set_dropped_file(full)
+            api.set_dropped_file(files[0].get("pywebviewFullPath", ""))
 
     # dom 需等页面加载完成后才可用，挂到 loaded 事件上
     def _on_loaded():
         try:
             window.dom.document.events.drop += _on_drop
-            print("[drop] document drop 监听器已注册", flush=True)
-        except Exception as e:
-            print(f"[drop] dom 注册失败（不影响点击选文件）: {e}", flush=True)
+        except Exception:
+            pass  # dom 注册失败不影响点击选文件
 
     try:
         window.events.loaded += _on_loaded
-    except Exception as e:
-        print(f"[drop] loaded 事件注册失败: {e}", flush=True)
+    except Exception:
+        pass
 
     webview.start(debug=not getattr(sys, "frozen", False))

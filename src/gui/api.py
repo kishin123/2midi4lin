@@ -27,11 +27,13 @@ class Api:
         self._window = window
 
     def set_dropped_file(self, path: str):
-        print(f"[drop] on_drop 收到: {path!r}", flush=True)
+        # 注意：windowed exe（无控制台）下 print 抛异常，这里不能有任何 print
         self._dropped_file = path
 
     def get_dropped_file(self) -> str:
-        return self._dropped_file or ""
+        path = self._dropped_file or ""
+        self._dropped_file = None  # 取后清除，防止下次拖拽误用上次残留路径
+        return path
 
     # ---- 前端调用的公开方法 ----
 

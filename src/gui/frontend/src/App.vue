@@ -114,47 +114,36 @@ function trHandleDrop(e: any) {
   // 判断是否为绝对路径（盘符开头 或 UNC）
   const isAbs = (p: string) => /^[A-Za-z]:[\\/]/.test(p) || /^\\\\/.test(p) || p.startsWith('/')
 
-  // 方式一：PyWebView 注入的完整路径（dom drop 监听器自动填充）
-  if (f?.pywebviewFullPath && isAbs(f.pywebviewFullPath)) {
-    vtm.url = ''
-    tr.filePath = f.pywebviewFullPath
-    tr.fileName = f.name
+  const apply = (p: string) => {
+    vtm.url = ''  // 互斥：拖入文件时清空视频链接
+    tr.filePath = p
+    tr.fileName = p.split(/[/\\]/).pop() || p
     analyzeAudio()
-    return
   }
 
-  // 方式二：等 Python on_drop 回调写入完整路径
-  setTimeout(() => {
+  // pywebview 6.x：完整路径只注入 Python 侧事件对象（util.py pywebviewEventHandler），
+  // 前端原生 drop 事件拿不到 pywebviewFullPath。唯一可靠通道是后端 get_dropped_file：
+  // drop 冒泡到 document → pywebview 发 Python → _on_drop 写入。链路异步，本机快 80ms 能回，
+  // 慢机器可能超时 → 轮询递增等待，最长约 2.4s，拿到绝对路径即用。
+  const waits = [80, 150, 300, 600, 1200]
+  let wi = 0
+  const poll = () => {
     callApi('get_dropped_file').then((path: string) => {
-      if (path && isAbs(path)) {
-        vtm.url = ''  // 互斥：拖入文件时清空视频链接
-        tr.filePath = path
-        analyzeAudio()
-        tr.fileName = path.split(/[/\\]/).pop() || path
-        return
-      }
-      // 方式三：JS File.path（仅当它是绝对路径，否则忽略避免错误路径）
-      if (f?.path && isAbs(f.path)) {
-        vtm.url = ''
-        tr.filePath = f.path
-        tr.fileName = f.name
-        analyzeAudio()
-        return
-      }
+      if (path && isAbs(path)) { apply(path); return }
+      if (wi < waits.length) { setTimeout(poll, waits[wi++]); return }
+      // 兜底：JS File.path（仅当它是绝对路径，否则忽略避免错误路径）
+      if (f?.path && isAbs(f.path)) { apply(f.path); return }
       // 最后的降级：只有文件名（dev 浏览器预览场景），提示用户
       if (f?.name) {
         tr.filePath = f.name
         tr.fileName = f.name
-        alert('预览模式无法获取完整路径，请使用「点击选择文件」')
+        alert('拖拽未获取到完整文件路径，请改用「点击选择文件」选择音频')
       }
     }).catch(() => {
-      if (f?.path && isAbs(f.path)) {
-        tr.filePath = f.path
-        tr.fileName = f.name
-        analyzeAudio()
-      }
+      if (f?.path && isAbs(f.path)) apply(f.path)
     })
-  }, 80)
+  }
+  setTimeout(poll, waits[wi++])
 }
 
 // ======== 视频转 MIDI（整合到转录页） ========
