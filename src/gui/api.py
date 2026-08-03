@@ -77,11 +77,24 @@ class Api:
 
     def get_device_status(self) -> dict:
         """探测当前可用的推理设备（GPU 加速状态），供前端提前展示。"""
+        import traceback
         try:
             from src.transcription.onnx_transcriber import ONNXTranscriber
-            return ONNXTranscriber.detect_device()
-        except Exception:
+            result = ONNXTranscriber.detect_device()
+            self._log_device(f"[OK] detect_device -> {result}")
+            return result
+        except Exception as e:
+            self._log_device(f"[FAIL] {type(e).__name__}: {e}\n{traceback.format_exc()}")
             return {"provider": "CPUExecutionProvider", "gpu": False, "label": "CPU"}
+
+    def _log_device(self, msg: str):
+        try:
+            import os
+            log_path = os.path.join(os.path.expanduser("~"), "2midi4lin_device.log")
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(msg + "\n")
+        except Exception:
+            pass
 
     def open_file_dialog(self, file_types: str = "audio") -> str:
         """打开系统文件选择对话框。"""

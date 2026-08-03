@@ -375,7 +375,30 @@ async function loadDevice() {
   } catch (e: any) { device.value.loaded = false }
 }
 
-loadDevice()
+// PyWebView 注入与 api 填充是异步的：window.pywebview 先注入（api 为空），
+// pywebviewready 事件后才填充方法。Vue module script 异步执行可能早于注入，
+// 因此分层等待：无 pw 时短轮询等注入；有 pw 但 api 空时等 pywebviewready + 轮询。
+// 超过 2 秒仍未注入视为浏览器预览（走 mock）。
+let bootTries = 0
+function bootInit() {
+  const pw = (window as any).pywebview
+  if (pw?.api?.get_device_status) {
+    loadCookie()
+    loadDevice()
+  } else if (pw) {
+    // pywebview 已注入但 api 未填充：等 pywebviewready + 轮询兜底
+    window.addEventListener('pywebviewready', bootInit, { once: true })
+    setTimeout(bootInit, 400)
+  } else if (bootTries++ < 10) {
+    // pywebview 尚未注入（module script 早于注入执行）：短轮询等待
+    setTimeout(bootInit, 200)
+  } else {
+    // 真·浏览器预览（无 pywebview）：走 mock
+    loadCookie()
+    loadDevice()
+  }
+}
+bootInit()
 
 // ======== 设置折叠 ========
 const showSettings = ref(false)
