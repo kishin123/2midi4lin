@@ -332,19 +332,23 @@ class ONNXTranscriber(TranscribeBase):
                             ("CUDAExecutionProvider", "CUDA")):
             if prov not in available:
                 continue
-            if prov == "DmlExecutionProvider" and not ONNXTranscriber._has_hardware_gpu():
-                continue
+            if prov == "DmlExecutionProvider":
+                gpu_name = ONNXTranscriber._get_hardware_gpu()
+                if gpu_name is None:
+                    continue  # 确认无硬件 GPU（虚拟机/远程/仅基本显示适配器）
+            else:
+                gpu_name = "unknown"
             if ONNXTranscriber._probe_provider(prov):
-                return {"provider": prov, "gpu": True, "label": label}
-        return {"provider": "CPUExecutionProvider", "gpu": False, "label": "CPU"}
+                return {"provider": prov, "gpu": True, "label": label,
+                        "device_name": gpu_name}
+        return {"provider": "CPUExecutionProvider", "gpu": False, "label": "CPU",
+                "device_name": None}
 
     @staticmethod
-    def _has_hardware_gpu() -> bool:
-        """检测系统是否存在硬件 GPU（排除 Microsoft 基本显示适配器/远程/虚拟显卡）。
+    def _get_hardware_gpu():
+        """返回第一个硬件 GPU 名称（排除 Microsoft 基本/远程/虚拟显示适配器）。
 
-        DirectML 需要真实 DX12 硬件；无 GPU 的机器（虚拟机/远程会话）只有
-        Microsoft Basic/Remote Display Adapter，DirectML 会退回 WARP 软件渲染，
-        不算真正的 GPU 加速。
+        返回：GPU 名称字符串 | None（确认无硬件 GPU）| "unknown"（查询失败，保守不误伤）
         """
         try:
             out = subprocess.run(
@@ -360,10 +364,10 @@ class ONNXTranscriber(TranscribeBase):
                 if ("microsoft" in low or "basic" in low or "remote" in low
                         or "virtual" in low or "display adapter" in low):
                     continue
-                return True
-            return False
+                return name
+            return None
         except Exception:
-            return True  # 查询失败保守返回 True，不误伤正常机器
+            return "unknown"  # 查询失败保守返回 unknown，由 DML 实测兜底
 
     @staticmethod
     def _probe_provider(provider: str) -> bool:

@@ -366,12 +366,12 @@ async function clearCookie() {
 loadCookie()
 
 // ======== GPU 加速状态（开始转录前探测） ========
-const device = ref({ provider: '', gpu: false, label: '', loaded: false })
+const device = ref({ provider: '', gpu: false, label: '', device_name: null as string | null, loaded: false })
 
 async function loadDevice() {
   try {
     const r = await callApi('get_device_status')
-    device.value = { provider: r.provider, gpu: !!r.gpu, label: r.label, loaded: true }
+    device.value = { provider: r.provider, gpu: !!r.gpu, label: r.label, device_name: r.device_name ?? null, loaded: true }
   } catch (e: any) { device.value.loaded = false }
 }
 
@@ -475,7 +475,7 @@ const showSettings = ref(false)
           <p class="hint" style="margin-top:6px">轻柔=抒情稀疏 · 标准=常规演奏 · 华丽=装饰多音符密</p>
         </template>
         <div class="device-bar" v-if="device.loaded">
-          <span v-if="device.gpu" class="dev-gpu">⚡ GPU 加速已启用（{{ device.label }}），转录更快</span>
+          <span v-if="device.gpu" class="dev-gpu">⚡ GPU 加速已启用（{{ device.label }}{{ device.device_name && device.device_name !== 'unknown' ? ' · ' + device.device_name : '' }}），转录更快</span>
           <span v-else class="dev-cpu">💻 使用 CPU 计算（转录较慢，可安装显卡驱动开启加速）</span>
         </div>
         <div class="action-row" style="margin-top:12px">
