@@ -11,6 +11,7 @@ window.addEventListener('drop', (e: any) => { e.preventDefault?.() })
 // ---- 工具函数 ----
 // 预览模式：浏览器里没有 pywebview 时用 mock 数据，方便 npm run dev 直接看 UI
 const isMock = !(window as any).pywebview
+let mockCookieOn = false // mock 状态：cookies 是否已导入
 
 function mockCall(method: string, _args: any[]): Promise<any> {
   const delay = (v: any) => new Promise(res => setTimeout(() => res(v), 600))
@@ -38,9 +39,10 @@ function mockCall(method: string, _args: any[]): Promise<any> {
     case 'choose_save_dir': return delay({ ok: true, msg: '已设置：C:/Users/demo/Music/我的作品' })
     case 'set_save_dir': return delay({ ok: true, msg: '已设置目录' })
     case 'reset_save_dir': return delay({ ok: true, msg: '已恢复默认' })
-    case 'get_cookie_status': return delay({ configured: false, path: '', save_dir: 'C:/Users/demo/2midi4lin' })
-    case 'choose_cookie_file': return delay({ ok: true, msg: '已启用 cookies：cookies.txt' })
-    case 'clear_cookie': return delay({ ok: true, msg: '已清除 cookies' })
+    case 'get_cookie_status': return delay({ configured: mockCookieOn, path: mockCookieOn ? 'C:/Users/demo/.2midi4lin/cookies.txt' : '', save_dir: 'C:/Users/demo/2midi4lin' })
+    case 'choose_cookie_file': { mockCookieOn = true; return delay({ ok: true, msg: '已导入 cookies.txt' }) }
+    case 'clear_cookie': { mockCookieOn = false; return delay({ ok: true, msg: '已清除 cookies' }) }
+    case 'get_device_status': return delay({ provider: 'CPUExecutionProvider', gpu: false, label: 'CPU' })
     default: return delay(null)
   }
 }
@@ -178,17 +180,16 @@ async function vtmStart() {
 }
 function vtmOpenFolder() { if (vtm.resultPath) callApi('open_file', vtm.resultPath).catch(()=>{}) }
 
-// 视频链接平台提示：识别 B站/YouTube 显示对应指引
+// 视频链接平台提示：常驻显示 YouTube 反爬提醒，粘贴链接后按平台细化
 const vtmUrlHint = computed(() => {
   const u = vtm.url.trim().toLowerCase()
-  if (!u) return '粘贴视频链接后直接点下方「开始转录」即可（与本地文件二选一）'
   if (u.includes('bilibili.com') || u.includes('b23.tv')) {
     return '✅ B站链接，可直接转录；若提示需登录，请换公开视频或登录后重试'
   }
   if (u.includes('youtube.com') || u.includes('youtu.be')) {
-    return '⚠️ YouTube 若遇反爬验证，请在 ⚙️设置 → 🎫 YouTube 授权 导入 cookies.txt 后重试'
+    return '⚠️ YouTube 若遇反爬验证，请在 ⚙️设置 → 🎫 YouTube 授权 导入 cookies.txt 后重试，或换用 B站链接'
   }
-  return '粘贴视频链接后直接点下方「开始转录」即可（与本地文件二选一）'
+  return '💡 B站链接可直接转录；YouTube 若遇反爬验证，请在 ⚙️设置 → 🎫 YouTube 授权 导入 cookies.txt'
 })
 
 // 完成时提示分享（延迟 1s，让用户先看到结果）
@@ -361,6 +362,18 @@ async function clearCookie() {
 
 loadCookie()
 
+// ======== GPU 加速状态（开始转录前探测） ========
+const device = ref({ provider: '', gpu: false, label: '', loaded: false })
+
+async function loadDevice() {
+  try {
+    const r = await callApi('get_device_status')
+    device.value = { provider: r.provider, gpu: !!r.gpu, label: r.label, loaded: true }
+  } catch (e: any) { device.value.loaded = false }
+}
+
+loadDevice()
+
 // ======== 设置折叠 ========
 const showSettings = ref(false)
 </script>
@@ -370,7 +383,10 @@ const showSettings = ref(false)
     <header>
       <h1>🎹 2midi4lin</h1>
       <p class="subtitle">钢琴 MIDI 工具集</p>
-      <button class="btn-share-header" @click="openShareDialog()" title="分享作品">📤</button>
+      <div class="header-actions">
+        <button class="btn-icon" @click="showSettings = !showSettings" :title="showSettings ? '收起设置' : '设置'" :class="{active: showSettings}">⚙️</button>
+        <button class="btn-icon" @click="openShareDialog()" title="分享作品">📤</button>
+      </div>
     </header>
 
     <!-- 标签页 -->
@@ -381,8 +397,8 @@ const showSettings = ref(false)
 
     <!-- ========== 转录面板 ========== -->
     <div v-show="tab === 'transcribe'" class="panel">
-      <!-- 本地音频文件 -->
-      <section class="card">
+      <!-- 输入源：本地文件 或 视频链接（二选一，左右两栏） -->
+      <section class="card input-card">
         <div class="drop-zone" @click="trSelectFile" @dragover.prevent @drop.prevent="trHandleDrop">
           <div v-if="!tr.filePath" class="placeholder">
             <span class="icon">📂</span><span>点击选择音频文件</span>
@@ -398,16 +414,12 @@ const showSettings = ref(false)
             <span class="a-tip">{{ tr.analysis.tips }}</span>
           </div>
         </div>
-      </section>
-
-      <!-- 视频链接转 MIDI -->
-      <section class="card">
-        <div class="search-row">
-          <input v-model="vtm.url" class="search-input" placeholder="或粘贴钢琴演奏视频链接（B站/YouTube），直接转 MIDI"
+        <div class="input-video">
+          <div class="input-divider-v"><span>或粘贴视频链接</span></div>
+          <input v-model="vtm.url" class="search-input" placeholder="B站 / YouTube 视频链接"
                  @keyup.enter="trStart" @input="if (vtm.url.trim() && tr.filePath) { tr.filePath=''; tr.fileName=''; tr.analysis=null }" />
-        </div>
-        <p class="hint" style="margin-top:6px">{{ vtmUrlHint }}</p>
-        <section v-if="vtm.status==='running'" class="card progress-row" style="margin-top:8px;padding:8px 4px">
+          <p class="hint" style="margin-top:6px">{{ vtmUrlHint }}</p>
+        </div>        <section v-if="vtm.status==='running'" class="card progress-row" style="margin-top:8px;padding:8px 4px">
           <div class="bar"><div class="fill" :style="{width:vtm.progress+'%'}"></div></div>
           <span class="pct">{{ vtm.progress }}%</span>
         </section>
@@ -427,7 +439,7 @@ const showSettings = ref(false)
         </section>
       </section>
 
-      <!-- 转录模式 + 演奏风格 -->
+      <!-- 转录模式 + 演奏风格 + 开始（合并一张卡） -->
       <section class="card">
         <label class="label">转录模式</label>
         <div class="style-group">
@@ -440,7 +452,7 @@ const showSettings = ref(false)
             <span>🎹 翻奏改编</span>
           </label>
         </div>
-        <p class="hint" style="margin-top:6px">忠实转录=逐音还原（适合钢琴独奏/钢琴视频） · 翻奏改编=风格化重编（适合流行歌/混音）</p>
+        <p class="hint" style="margin-top:6px">忠实=逐音还原（适合钢琴独奏） · 翻奏=风格化重编（适合流行歌）</p>
         <template v-if="tr.mode==='apc'">
           <label class="label" style="margin-top:10px">演奏风格</label>
           <div class="style-group">
@@ -452,14 +464,16 @@ const showSettings = ref(false)
           </div>
           <p class="hint" style="margin-top:6px">轻柔=抒情稀疏 · 标准=常规演奏 · 华丽=装饰多音符密</p>
         </template>
-      </section>
-
-      <!-- 开始按钮（文件或视频链接二选一） -->
-      <section class="card action-row">
-        <button class="btn-primary" :disabled="(!tr.filePath && !vtm.url.trim())||tr.status==='running'||vtm.status==='running'" @click="trStart">
-          {{ vtm.status==='running' || (vtm.url.trim() && tr.status==='running') ? '处理中...' : (vtm.url.trim() ? '🎬 视频转MIDI' : '开始转录') }}
-        </button>
-        <button v-if="tr.status!=='idle'||vtm.status!=='idle'" class="btn-second" @click="trReset">重置</button>
+        <div class="device-bar" v-if="device.loaded">
+          <span v-if="device.gpu" class="dev-gpu">⚡ GPU 加速已启用（{{ device.label }}）</span>
+          <span v-else class="dev-cpu">💻 使用 CPU 计算（转录较慢，可安装显卡驱动开启加速）</span>
+        </div>
+        <div class="action-row" style="margin-top:12px">
+          <button class="btn-primary" :disabled="(!tr.filePath && !vtm.url.trim())||tr.status==='running'||vtm.status==='running'" @click="trStart">
+            {{ vtm.status==='running' || (vtm.url.trim() && tr.status==='running') ? '处理中...' : (vtm.url.trim() ? '🎬 视频转MIDI' : '开始转录') }}
+          </button>
+          <button v-if="tr.status!=='idle'||vtm.status!=='idle'" class="btn-second" @click="trReset">重置</button>
+        </div>
       </section>
       <section v-if="tr.status==='running'" class="card progress-row">
         <div class="bar"><div class="fill" :style="{width:tr.progress+'%'}"></div></div>
@@ -530,45 +544,7 @@ const showSettings = ref(false)
       </section>
     </div>
 
-    <!-- 设置（折叠） -->
-    <section class="card settings-card">
-      <div class="settings-toggle" @click="showSettings = !showSettings">
-        <span>⚙️ 设置</span>
-        <span class="chevron" :class="{open: showSettings}">▾</span>
-      </div>
-      <div v-show="showSettings" class="settings-body">
-        <div class="settings-group">
-          <h4>📁 保存目录</h4>
-          <p class="path" style="margin:4px 0 8px; word-break:break-all">
-            当前：{{ saveDir.dir || '加载中...' }}
-            <span v-if="saveDir.custom" style="color:#FFD54F">（自定义）</span>
-            <span v-else style="color:var(--muted)">（默认）</span>
-          </p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn-primary btn-s" @click="chooseSaveDir" :disabled="saveDir.loading">📂 选择目录</button>
-            <button class="btn-second btn-s" @click="resetSaveDir" :disabled="saveDir.loading">↩ 恢复默认</button>
-          </div>
-          <p v-if="saveDir.msg" class="path" style="margin-top:6px; color:#4FC3F7">{{ saveDir.msg }}</p>
-          <p class="path" style="margin-top:6px; color:var(--muted)">转录/视频/下载的成品统一保存到该目录下，默认跟随 exe 所在位置</p>
-        </div>
-        <div class="settings-group">
-          <h4>🎫 YouTube 授权</h4>
-          <p class="path" style="margin:4px 0 8px">
-            状态：
-            <span v-if="cookie.configured" style="color:#81C784">✅ 已启用</span>
-            <span v-else style="color:var(--muted)">未配置（下载 YouTube 可能触发反爬验证）</span>
-          </p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn-primary btn-s" @click="chooseCookie" :disabled="cookie.loading">📄 导入 cookies 文件</button>
-            <button v-if="cookie.configured" class="btn-second btn-s" @click="clearCookie" :disabled="cookie.loading">🗑 清除</button>
-          </div>
-          <p v-if="cookie.msg" class="path" style="margin-top:6px; color:#4FC3F7">{{ cookie.msg }}</p>
-          <p class="path" style="margin-top:6px; color:var(--muted)">从浏览器导出 YouTube 的 cookies.txt（Chrome 装 Get cookies.txt LOCALLY 扩展），导入后下载 YouTube 不再触发验证</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- 页脚：常驻入口 -->
+    <!-- 页脚：作品集 + B站 文字入口 -->
     <footer class="footer">
       <span>🌐 作品集：</span>
       <a href="#" @click.prevent="openSharePage">2midi4lin.kesug.com</a>
@@ -576,6 +552,36 @@ const showSettings = ref(false)
       <span>B站：</span>
       <a href="#" @click.prevent="openBili">真夏的硬币</a>
     </footer>
+    <section v-show="showSettings" class="card settings-card">
+      <div class="settings-body">
+        <div class="settings-item">
+          <div class="si-head">
+            <h4>📁 保存目录</h4>
+            <span class="si-badge" :class="saveDir.custom ? 'badge-custom' : 'badge-default'">{{ saveDir.custom ? '自定义' : '默认' }}</span>
+          </div>
+          <div class="si-path" :title="saveDir.dir">{{ saveDir.dir || '加载中...' }}</div>
+          <div class="si-actions">
+            <button class="btn-second btn-s" @click="chooseSaveDir" :disabled="saveDir.loading">📂 选择目录</button>
+            <button class="btn-second btn-s" @click="resetSaveDir" :disabled="saveDir.loading">↩ 恢复默认</button>
+          </div>
+          <p v-if="saveDir.msg" class="hint" style="color:#4FC3F7">{{ saveDir.msg }}</p>
+          <p class="hint">默认目录为程序所在位置，不可写时自动回退到「我的文档」</p>
+        </div>
+        <div class="settings-item">
+          <div class="si-head">
+            <h4>🎫 YouTube 授权</h4>
+            <span class="si-badge" :class="cookie.configured ? 'badge-ok' : 'badge-warn'">{{ cookie.configured ? '已启用' : '未配置' }}</span>
+          </div>
+          <div v-if="cookie.configured" class="si-path" :title="cookie.path">{{ cookie.path }}</div>
+          <div class="si-actions">
+            <button class="btn-second btn-s" @click="chooseCookie" :disabled="cookie.loading">📄 导入 cookies</button>
+            <button v-if="cookie.configured" class="btn-second btn-s" @click="clearCookie" :disabled="cookie.loading">🗑 清除</button>
+          </div>
+          <p v-if="cookie.msg" class="hint" style="color:#4FC3F7">{{ cookie.msg }}</p>
+          <p class="hint">从浏览器导出 YouTube cookies.txt（Chrome 装 Get cookies.txt LOCALLY 扩展）后导入，下载 YouTube 不再触发反爬验证</p>
+        </div>
+      </div>
+    </section>
   </div>
 
   <!-- ========== 分享弹窗 ========== -->
@@ -606,61 +612,67 @@ const showSettings = ref(false)
 
 <style>
 :root {
-  --bg: #0f1220;
-  --card: #1a2133;
-  --card-border: #2a3450;
-  --accent: #e94560;
-  --accent2: #ff7b95;
-  --gold: #e8b04b;
-  --text: #eef1f8;
-  --muted: #8b94ab;
-  --radius: 14px;
-  --shadow: 0 4px 20px rgba(0,0,0,.35);
-  --glow: 0 0 0 1px rgba(233,69,96,.25), 0 4px 18px rgba(233,69,96,.15);
+  --bg: #1e1e2e;
+  --card: #262637;
+  --card-border: #3a3a4a;
+  --accent: #e34f4f;
+  --accent-hover: #f05a5a;
+  --text: #e8e8f0;
+  --muted: #9a9ab0;
+  --radius: 12px;
+  --shadow: 0 4px 12px rgba(0,0,0,.2);
+  --glow: 0 0 0 1px rgba(227,79,79,.25), 0 4px 14px rgba(227,79,79,.12);
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   font-family: -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  background: radial-gradient(1100px 560px at 15% -10%, #232a4a 0%, var(--bg) 55%), var(--bg);
+  background: var(--bg);
   color: var(--text);
   min-height: 100vh;
 }
-.app { max-width: 560px; margin: 0 auto; padding: 24px 14px 40px; display: flex; flex-direction: column; gap: 14px; }
-header { text-align: center; padding: 18px 0 10px; position: relative; }
+.app { max-width: 780px; margin: 0 auto; padding: 16px 20px 24px; display: flex; flex-direction: column; gap: 14px; }
+header { text-align: center; padding: 8px 0 4px; position: relative; }
 header h1 {
-  font-size: 28px; letter-spacing: 1px;
-  background: linear-gradient(120deg, #fff, var(--gold));
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 2px 10px rgba(232,176,75,.22));
+  font-size: 24px; letter-spacing: .5px; font-weight: 700;
+  color: #f0f0f0;
 }
-.subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; }
-.btn-share-header { position: absolute; right: 0; top: 16px; background: rgba(255,255,255,.04); border: 1px solid var(--card-border); border-radius: 10px; color: var(--muted); font-size: 18px; padding: 6px 10px; cursor: pointer; transition: all .2s; backdrop-filter: blur(4px); }
-.btn-share-header:hover { border-color: var(--accent); color: var(--accent); box-shadow: var(--glow); }
+.subtitle { color: var(--muted); font-size: 12px; margin-top: 2px; letter-spacing: 1.5px; }
+.header-actions { position: absolute; right: 0; top: 6px; display: flex; gap: 6px; }
+.btn-icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: var(--card); border: 1px solid var(--card-border); border-radius: 8px; color: var(--muted); font-size: 14px; cursor: pointer; transition: all .2s; }
+.btn-icon:hover { border-color: var(--accent); color: var(--text); }
+.btn-icon.active { color: var(--accent); border-color: var(--accent); background: rgba(227,79,79,.08); }
 
 /* 标签页 */
-.tabs { display: flex; gap: 4px; background: rgba(255,255,255,.04); border: 1px solid var(--card-border); border-radius: var(--radius); padding: 4px; }
-.tab { flex: 1; padding: 11px; border: none; border-radius: 10px; background: transparent; color: var(--muted); font-size: 14px; font-weight: 600; cursor: pointer; transition: all .25s; letter-spacing: .5px; }
-.tab.active { background: linear-gradient(135deg, var(--accent2), var(--accent)); color: #fff; box-shadow: 0 4px 14px rgba(233,69,96,.35); }
-.tab:not(.active):hover { background: rgba(255,255,255,.06); color: var(--text); }
+.tabs { display: flex; gap: 2px; background: var(--card); border-radius: var(--radius); padding: 3px; }
+.tab { flex: 1; padding: 9px; border: none; border-radius: 9px; background: transparent; color: var(--muted); font-size: 14px; font-weight: 500; cursor: pointer; transition: all .2s; }
+.tab.active { background: var(--accent); color: #fff; }
+.tab:not(.active):hover { color: var(--text); background: rgba(255,255,255,.04); }
 .panel { display: flex; flex-direction: column; gap: 14px; }
 
 .card {
-  background: linear-gradient(180deg, rgba(255,255,255,.03), transparent 40%), var(--card);
+  background: var(--card);
   border: 1px solid var(--card-border);
   border-radius: var(--radius);
   padding: 16px 18px;
   box-shadow: var(--shadow);
+  transition: border-color .2s;
 }
+.card:hover { border-color: #4a4a5a; }
 .card h4 { font-size: 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
-.label { font-size: 12px; color: var(--muted); margin-bottom: 8px; display: block; }
+.label { font-size: 12px; color: var(--muted); margin-bottom: 8px; display: block; letter-spacing: .3px; }
 
 /* 文件区 */
-.drop-zone { border: 2px dashed #3a4a6b; border-radius: 12px; padding: 28px 12px; text-align: center; cursor: pointer; transition: all .25s; background: rgba(255,255,255,.02); }
-.drop-zone:hover { border-color: var(--gold); background: rgba(232,176,75,.05); }
-.placeholder { display: flex; flex-direction: column; gap: 6px; align-items: center; }
-.placeholder .icon { font-size: 34px; }
-.hint { font-size: 12px; color: var(--muted); line-height: 1.6; }
-.file-info { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: rgba(255,255,255,.03); border: 1px solid var(--card-border); border-radius: 10px; }
+.drop-zone { border: 2px dashed #4a4a5a; border-radius: 10px; padding: 18px 12px; text-align: center; cursor: pointer; transition: all .2s; background: rgba(255,255,255,.01); }
+.drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); background: rgba(227,79,79,.04); }
+.input-card { display: flex; gap: 0; align-items: stretch; }
+.input-card .drop-zone { flex: 1; border-radius: 8px; }
+.input-video { flex: 1; display: flex; flex-direction: column; justify-content: center; padding-left: 16px; border-left: 1px solid var(--card-border); }
+.input-divider-v { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; color: var(--muted); font-size: 12px; }
+.input-divider-v::before, .input-divider-v::after { content: ''; flex: 1; height: 1px; background: var(--card-border); }
+.placeholder { display: flex; flex-direction: column; gap: 4px; align-items: center; position: relative; }
+.placeholder .icon { font-size: 28px; position: relative; }
+.hint { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.file-info { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: rgba(255,255,255,.03); border: 1px solid var(--card-border); border-radius: 8px; }
 .file-info .icon { font-size: 20px; }
 .file-info .name { flex: 1; word-break: break-all; font-size: 14px; }
 .btn-ghost { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 4px; transition: color .2s; }
@@ -668,26 +680,29 @@ header h1 {
 
 /* 风格 */
 .style-group { display: flex; gap: 8px; }
-.style-opt { flex: 1; padding: 10px 8px; text-align: center; border-radius: 10px; border: 2px solid var(--card-border); cursor: pointer; font-size: 13px; font-weight: 600; transition: all .2s; background: rgba(255,255,255,.02); }
+.style-opt { flex: 1; padding: 8px; text-align: center; border-radius: 8px; border: 1px solid var(--card-border); cursor: pointer; font-size: 13px; font-weight: 500; transition: all .2s; background: rgba(255,255,255,.01); }
 .style-opt input { display: none; }
-.style-opt.active { border-color: var(--accent); background: linear-gradient(135deg, rgba(233,69,96,.18), rgba(233,69,96,.05)); color: #fff; box-shadow: var(--glow); }
+.style-opt.active { border-color: var(--accent); background: rgba(227,79,79,.1); color: #fff; }
 
 /* 按钮 */
 .action-row { display: flex; gap: 10px; }
-.btn-primary { flex: 1; padding: 13px; border: none; border-radius: 10px; background: linear-gradient(135deg, var(--accent2), var(--accent)); color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 14px rgba(233,69,96,.3); transition: all .2s; letter-spacing: .5px; }
-.btn-primary:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
-.btn-primary:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(233,69,96,.4); filter: brightness(1.06); }
-.btn-primary:not(:disabled):active { transform: translateY(0); }
-.btn-second { padding: 12px 16px; border: 1px solid var(--card-border); border-radius: 10px; background: rgba(255,255,255,.04); color: var(--text); cursor: pointer; font-size: 14px; transition: all .2s; }
-.btn-second:hover { border-color: var(--accent); color: var(--accent); background: rgba(233,69,96,.06); }
-.btn-s { padding: 8px 14px; font-size: 13px; flex: 0; }
-.btn-xs { padding: 6px 12px; font-size: 12px; flex: 0; }
+.btn-primary { flex: 1; height: 40px; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; transition: all .2s; }
+.btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+.btn-primary:not(:disabled):hover { background: var(--accent-hover); }
+.btn-primary:not(:disabled):active { transform: translateY(1px); }
+.btn-second { height: 36px; padding: 0 16px; border: 1px solid var(--card-border); border-radius: 8px; background: var(--card); color: var(--text); cursor: pointer; font-size: 13px; transition: all .2s; white-space: nowrap; }
+.btn-second:hover { border-color: var(--accent); color: var(--accent); }
+.btn-s { padding: 0 14px; font-size: 12px; height: 32px; flex: 0 0 auto; white-space: nowrap; }
+.btn-xs { padding: 0 12px; font-size: 12px; height: 28px; flex: 0 0 auto; white-space: nowrap; }
 
 /* 进度 */
+.device-bar { text-align: center; margin-bottom: 2px; }
+.dev-gpu { font-size: 12px; color: #81C784; background: rgba(129,199,132,.08); border: 1px solid rgba(129,199,132,.25); border-radius: 6px; padding: 4px 10px; display: inline-block; }
+.dev-cpu { font-size: 12px; color: #9a9ab0; background: rgba(154,154,176,.08); border: 1px solid rgba(154,154,176,.2); border-radius: 6px; padding: 4px 10px; display: inline-block; }
 .progress-row { display: flex; align-items: center; gap: 10px; }
-.bar { flex: 1; height: 8px; border-radius: 4px; background: #2a3450; overflow: hidden; }
-.fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--gold)); border-radius: 4px; transition: width .3s; box-shadow: 0 0 8px rgba(233,69,96,.4); }
-.pct { font-size: 13px; min-width: 38px; color: var(--muted); font-weight: 600; }
+.bar { flex: 1; height: 6px; border-radius: 3px; background: #3a3a4a; overflow: hidden; }
+.fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .3s; }
+.pct { font-size: 13px; min-width: 38px; color: var(--muted); font-weight: 500; }
 
 /* 结果 */
 .result { display: flex; align-items: center; gap: 10px; }
@@ -695,23 +710,23 @@ header h1 {
 .ri { flex: 1; }
 .ri p:first-child { font-weight: 600; font-size: 14px; }
 .path { font-size: 12px; color: var(--muted); word-break: break-all; margin-top: 2px; line-height: 1.5; }
-.success { border-left: 4px solid #4caf50; background: rgba(76,175,80,.06); }
-.error { border-left: 4px solid var(--accent); background: rgba(233,69,96,.06); }
+.success { border-left: 3px solid #4caf50; background: rgba(76,175,80,.05); }
+.error { border-left: 3px solid var(--accent); background: rgba(227,79,79,.05); }
 
 /* 搜索 */
 .search-row, .musescore-row { display: flex; gap: 8px; }
 .musescore-row { border-top: 1px solid var(--card-border); padding-top: 12px; }
-.search-input { flex: 1; background: #121827; border: 1px solid var(--card-border); border-radius: 10px; padding: 11px 14px; color: var(--text); font-size: 14px; transition: border-color .2s, box-shadow .2s; }
-.search-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(233,69,96,.15); }
-.search-input::placeholder { color: #5c6785; }
+.search-input { flex: 1; background: #20202e; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 12px; color: var(--text); font-size: 13px; transition: border-color .2s, box-shadow .2s; }
+.search-input:focus { outline: none; border-color: #5f95d7; box-shadow: 0 0 0 2px rgba(95,149,215,.15); }
+.search-input::placeholder { color: #6a6a80; }
 
 /* 结果列表 */
 .result-list { max-height: 380px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
-.result-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #121827; border: 1px solid var(--card-border); border-radius: 10px; transition: all .2s; }
-.result-item:hover { border-color: #3a4a6b; background: #161d30; }
+.result-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #20202e; border: 1px solid var(--card-border); border-radius: 8px; transition: all .2s; }
+.result-item:hover { border-color: #4a4a5a; background: #262637; }
 .result-item .title { font-size: 13px; }
 .src-bitmidi { color: #4CAF50; }
-.src-freemidi { color: #42a5f5; }
+.src-freemidi { color: #5f95d7; }
 .src-piano-midi { color: #ffa726; }
 .src-vgmusic { color: #ba68c8; }
 .src-midisss { color: #ef5350; }
@@ -719,36 +734,39 @@ header h1 {
 /* 滚动条 */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #2a3450; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #3a4a6b; }
+::-webkit-scrollbar-thumb { background: #3a3a4a; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #4a4a5a; }
 
 /* 适配度检测 */
-.analysis-badge { margin-top: 12px; padding: 10px 12px; background: linear-gradient(135deg, rgba(232,176,75,.08), rgba(232,176,75,.02)); border: 1px solid rgba(232,176,75,.3); border-radius: 10px; display: flex; flex-direction: column; gap: 3px; align-items: center; }
-.stars { font-size: 18px; letter-spacing: 3px; }
-.a-tip { font-size: 12px; color: var(--muted); }
+.analysis-badge { margin-top: 12px; padding: 10px 12px; background: rgba(255,167,38,.05); border: 1px solid rgba(255,167,38,.25); border-radius: 8px; display: flex; flex-direction: column; gap: 3px; align-items: center; }
+.stars { font-size: 16px; letter-spacing: 3px; }
 
 /* 分享弹窗 */
-.modal-overlay { position: fixed; inset: 0; background: rgba(5,8,16,.7); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.modal { background: linear-gradient(180deg, #1e2740, #161d30); border: 1px solid var(--card-border); border-radius: 16px; padding: 24px; width: 90%; max-width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,.5); animation: modalIn .2s ease; }
-@keyframes modalIn { from { opacity: 0; transform: translateY(12px) scale(.97); } to { opacity: 1; transform: none; } }
-.modal h3 { margin-bottom: 4px; }
-.modal .search-input { width: 100%; background: #121827; border: 1px solid var(--card-border); border-radius: 10px; padding: 10px 12px; color: var(--text); font-size: 14px; }
-.modal .search-input::placeholder { color: #5c6785; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(10,10,18,.65); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.modal { background: #262637; border: 1px solid var(--card-border); border-radius: 14px; padding: 22px; width: 90%; max-width: 400px; box-shadow: 0 20px 50px rgba(0,0,0,.4); animation: modalIn .2s ease; }
+@keyframes modalIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.modal h3 { margin-bottom: 4px; font-size: 16px; }
+.modal .search-input { width: 100%; background: #20202e; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 12px; color: var(--text); font-size: 13px; }
+.modal .search-input::placeholder { color: #6a6a80; }
 
-/* 页脚 */
-.footer { text-align: center; padding: 14px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--card-border); margin-top: 18px; }
+/* 页脚（常驻入口 + 设置开关） */
+.footer { text-align: center; padding: 10px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--card-border); margin-top: 10px; }
 .footer a { color: #7cc7ff; text-decoration: none; transition: color .2s; }
 .footer a:hover { color: #aadcff; text-decoration: underline; }
-.footer .sep { margin: 0 6px; color: #3a4a6b; }
-
-/* 设置折叠 */
-.settings-card { padding: 0; overflow: hidden; }
-.settings-toggle { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; cursor: pointer; font-size: 14px; font-weight: 600; user-select: none; transition: color .2s; }
-.settings-toggle:hover { color: var(--gold); }
-.chevron { transition: transform .25s; color: var(--muted); font-size: 12px; }
-.chevron.open { transform: rotate(180deg); }
-.settings-body { padding: 0 18px 16px; display: flex; flex-direction: column; gap: 14px; }
-.settings-group { border-top: 1px solid var(--card-border); padding-top: 14px; }
-.settings-group:first-child { border-top: none; padding-top: 0; }
-.settings-group h4 { font-size: 13px; margin-bottom: 6px; }
+.footer .sep { margin: 0 6px; color: #4a4a5a; }
+.settings-card { padding: 16px 18px; animation: slideDown .25s ease; }
+.settings-body { display: flex; flex-direction: column; gap: 16px; }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.settings-item { border-top: 1px solid var(--card-border); padding-top: 14px; }
+.settings-item:first-child { border-top: none; padding-top: 0; }
+.si-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.si-head h4 { font-size: 13px; color: var(--text); margin: 0; }
+.si-badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+.badge-default { background: rgba(154,154,176,.12); color: var(--muted); }
+.badge-custom { background: rgba(255,213,79,.12); color: #FFD54F; }
+.badge-ok { background: rgba(129,199,132,.12); color: #81C784; }
+.badge-warn { background: rgba(255,167,38,.12); color: #ffa726; }
+.si-path { font-size: 12px; color: var(--muted); background: #20202e; border: 1px solid var(--card-border); border-radius: 8px; padding: 8px 10px; word-break: break-all; margin-bottom: 8px; }
+.si-actions { display: flex; gap: 8px; }
+.settings-item .hint { margin-top: 6px; }
 </style>

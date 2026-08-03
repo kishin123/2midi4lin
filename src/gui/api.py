@@ -19,6 +19,7 @@ class Api:
         self._error_msg = None
         self._dropped_file = None
         self._stage = ""  # 阶段提示：下载中/转换中/转录中
+        self._device = "cpu"  # 实际推理设备：DmlExecutionProvider/CUDAExecutionProvider/CPUExecutionProvider
         self._window = None  # pywebview 窗口引用，选目录对话框用
 
     def set_window(self, window):
@@ -71,7 +72,16 @@ class Api:
             "result": self._result_path,
             "error": self._error_msg,
             "stage": self._stage,
+            "device": self._device,
         }
+
+    def get_device_status(self) -> dict:
+        """探测当前可用的推理设备（GPU 加速状态），供前端提前展示。"""
+        try:
+            from src.transcription.onnx_transcriber import OnnxTranscriber
+            return OnnxTranscriber.detect_device()
+        except Exception:
+            return {"provider": "CPUExecutionProvider", "gpu": False, "label": "CPU"}
 
     def open_file_dialog(self, file_types: str = "audio") -> str:
         """打开系统文件选择对话框。"""
@@ -246,6 +256,8 @@ class Api:
 
             on_progress(0)
             transcriber = get_transcriber("onnx", style=style, mode=mode)
+            # GPU/CPU 提示：读取实际使用的推理设备
+            self._device = getattr(transcriber, "device_info", "cpu")
             on_progress(2)
             result = transcriber.transcribe(audio_path, output_path, progress_callback=on_progress)
             self._progress = 100
@@ -269,6 +281,7 @@ class Api:
 
             on_progress(0)
             transcriber = get_transcriber("onnx", style=style)
+            self._device = getattr(transcriber, "device_info", "cpu")
             on_progress(2)
             midi_path = transcriber.transcribe(audio_path, output_midi, progress_callback=on_progress)
             self._progress = 70

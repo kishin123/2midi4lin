@@ -290,8 +290,27 @@ class ONNXTranscriber(TranscribeBase):
         self.style = style
         self.mode = mode
         self._ort_session = None
+        # 实际使用的推理设备（provider），供界面提示
+        self.device_info = "cpu"
         # AMT 模式无 style 注入（模型本身没有 style 输入）
         self._sv = None if mode == "amt" else _sample_style_vector(style).reshape(1, -1)
+
+    @staticmethod
+    def detect_device() -> dict:
+        """探测实际可用的推理设备（不依赖模型文件，可提前调用）。
+
+        返回 {"provider": "DmlExecutionProvider"|"CUDAExecutionProvider"|"CPUExecutionProvider",
+              "gpu": bool, "label": "DirectML (GPU)"|"CUDA (GPU)"|"CPU"}
+        """
+        try:
+            available = ort.get_available_providers()
+        except Exception:
+            return {"provider": "CPUExecutionProvider", "gpu": False, "label": "CPU"}
+        for prov, label in (("DmlExecutionProvider", "DirectML (GPU)"),
+                            ("CUDAExecutionProvider", "CUDA (GPU)")):
+            if prov in available:
+                return {"provider": prov, "gpu": True, "label": label}
+        return {"provider": "CPUExecutionProvider", "gpu": False, "label": "CPU"}
 
     def _get_session(self):
         if self._ort_session is None:
@@ -311,6 +330,9 @@ class ONNXTranscriber(TranscribeBase):
                 providers = ["CPUExecutionProvider"]
 
             self._ort_session = ort.InferenceSession(onnx_path, opts, providers=providers)
+            # 记录实际选中的 provider（界面提示用）
+            active = getattr(self._ort_session, "get_providers", None)
+            self.device_info = (active()[0] if active else providers[0]) or providers[0]
         return self._ort_session
 
     def is_available(self):
