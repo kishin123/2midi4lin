@@ -260,6 +260,9 @@ const shareCode = ref('')
 const shareTitle = ref('')
 const shareTitleEditable = ref(true) // 手动点分享可编辑曲名；自动弹出只读
 const shareMsg = ref('')
+
+// ======== 使用说明 ========
+const showHelp = ref(false)
 const shareOk = ref(false)
 
 async function doShare() {
@@ -384,6 +387,7 @@ const showSettings = ref(false)
       <h1>🎹 2midi4lin</h1>
       <p class="subtitle">钢琴 MIDI 工具集</p>
       <div class="header-actions">
+        <button class="btn-icon" @click="showHelp = true" title="使用说明">?</button>
         <button class="btn-icon" @click="showSettings = !showSettings" :title="showSettings ? '收起设置' : '设置'" :class="{active: showSettings}">⚙️</button>
         <button class="btn-icon" @click="openShareDialog()" title="分享作品">📤</button>
       </div>
@@ -465,7 +469,7 @@ const showSettings = ref(false)
           <p class="hint" style="margin-top:6px">轻柔=抒情稀疏 · 标准=常规演奏 · 华丽=装饰多音符密</p>
         </template>
         <div class="device-bar" v-if="device.loaded">
-          <span v-if="device.gpu" class="dev-gpu">⚡ GPU 加速已启用（{{ device.label }}）</span>
+          <span v-if="device.gpu" class="dev-gpu">⚡ GPU 加速已启用（{{ device.label }}），转录更快</span>
           <span v-else class="dev-cpu">💻 使用 CPU 计算（转录较慢，可安装显卡驱动开启加速）</span>
         </div>
         <div class="action-row" style="margin-top:12px">
@@ -585,6 +589,33 @@ const showSettings = ref(false)
   </div>
 
   <!-- ========== 分享弹窗 ========== -->
+  <div v-if="showHelp" class="modal-overlay" @click.self="showHelp=false">
+    <div class="modal" style="max-width:440px; max-height:72vh; overflow-y:auto">
+      <h3>💡 使用说明</h3>
+      <p class="hint" style="margin-bottom:10px">2midi4lin 将音频 / 视频一键转为钢琴 MIDI 谱</p>
+      <div class="help-sec">
+        <h4>快速上手</h4>
+        <ol class="help-ol">
+          <li>拖入音频文件（wav / mp3 / flac / ogg），或粘贴 B 站 / YouTube 视频链接</li>
+          <li>选择演奏风格（轻柔 / 标准 / 华丽）</li>
+          <li>点击「开始转录」，等待处理完成</li>
+          <li>完成后可打开成品文件夹、分享到集合页</li>
+        </ol>
+      </div>
+      <div class="help-sec">
+        <h4>常见说明</h4>
+        <ul class="help-ul">
+          <li><b>GPU 加速</b>：优先调用显卡（DirectML / CUDA），未检测到则使用 CPU</li>
+          <li><b>保存目录</b>：默认程序所在位置，可在设置中修改</li>
+          <li><b>YouTube 视频</b>：受限视频需在设置中导入 cookies</li>
+          <li><b>作品分享</b>：分享码从「林离」软件获取，填入后作品展示在集合页</li>
+        </ul>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn-primary" style="flex:1" @click="showHelp=false">知道了</button>
+      </div>
+    </div>
+  </div>
   <div v-if="showShare" class="modal-overlay" @click.self="showShare=false">
     <div class="modal">
       <h3>📤 分享作品</h3>
@@ -748,6 +779,11 @@ header h1 {
 .modal h3 { margin-bottom: 4px; font-size: 16px; }
 .modal .search-input { width: 100%; background: #20202e; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 12px; color: var(--text); font-size: 13px; }
 .modal .search-input::placeholder { color: #6a6a80; }
+.help-sec { margin-bottom: 10px; }
+.help-sec h4 { font-size: 13px; color: var(--text); margin: 0 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--card-border); }
+.help-ol, .help-ul { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--muted); line-height: 1.9; }
+.help-ol li, .help-ul li { margin-bottom: 2px; }
+.help-ul b { color: var(--text); font-weight: 600; }
 
 /* 页脚（常驻入口 + 设置开关） */
 .footer { text-align: center; padding: 10px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--card-border); margin-top: 10px; }

@@ -306,8 +306,8 @@ class ONNXTranscriber(TranscribeBase):
             available = ort.get_available_providers()
         except Exception:
             return {"provider": "CPUExecutionProvider", "gpu": False, "label": "CPU"}
-        for prov, label in (("DmlExecutionProvider", "DirectML (GPU)"),
-                            ("CUDAExecutionProvider", "CUDA (GPU)")):
+        for prov, label in (("DmlExecutionProvider", "DirectML"),
+                            ("CUDAExecutionProvider", "CUDA")):
             if prov in available:
                 return {"provider": prov, "gpu": True, "label": label}
         return {"provider": "CPUExecutionProvider", "gpu": False, "label": "CPU"}
