@@ -300,7 +300,7 @@ class ONNXTranscriber(TranscribeBase):
         """探测实际可用的推理设备（不依赖模型文件，可提前调用）。
 
         返回 {"provider": "DmlExecutionProvider"|"CUDAExecutionProvider"|"CPUExecutionProvider",
-              "gpu": bool, "label": "DirectML (GPU)"|"CUDA (GPU)"|"CPU"}
+              "gpu": bool, "label": "DirectML"|"CUDA"|"CPU"}
         """
         try:
             available = ort.get_available_providers()
